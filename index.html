@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Админка — Vape Shop</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+    input, button, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; }
+    button { background: #0088cc; color: white; border: none; cursor: pointer; font-weight: bold; }
+    .delete-btn { background: #e53935; width: auto; display: inline-block; margin: 0 4px; }
+    .product-card { background: white; padding: 16px; margin: 12px 0; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .product-img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <div style="max-width:800px; margin:0 auto; padding:20px;">
+    <h2>🛠 Админка — Vape Shop</h2>
+    
+    <h3>➕ Добавить / обновить товар</h3>
+    <input type="text" id="name" placeholder="Название товара">
+    <div style="display:flex; gap:8px;">
+      <input type="number" id="price" placeholder="Цена (BYN)" step="0.01">
+      <input type="number" id="stock" placeholder="Остаток на складе" min="0">
+    </div>
+    <input type="text" id="image" placeholder="Ссылка на фото (загрузите на imgbb.com)">
+    <select id="category">
+      <option value="liquids">Жидкости</option>
+      <option value="hardware">Железо</option>
+    </select>
+    <input type="text" id="brand" placeholder="Бренд (латиницей, например: bad_drip)">
+    <input type="hidden" id="edit-index">
+    <button onclick="saveProduct()">Сохранить товар</button>
+
+    <h3>📦 Товары</h3>
+    <div id="products-list"></div>
+  </div>
+
+  <script>
+    // ↓↓↓ ЗАМЕНИ ЭТИ URL НА СВОИ ↓↓↓
+    const API_URL = "https://vape-shop-api.vercel.app";
+    const DATA_URL = "https://vape-shop-data.vercel.app/db.json";
+    // ↑↑↑ ЗАМЕНИ ЭТИ URL НА СВОИ ↑↑↑
+
+    let products = [];
+
+    async function loadProducts() {
+      const res = await fetch(DATA_URL + "?t=" + Date.now());
+      const data = await res.json();
+      products = data.products || [];
+      renderList();
+    }
+
+    function renderList() {
+      const list = document.getElementById('products-list');
+      list.innerHTML = products.map((p, i) => `
+        <div class="product-card">
+          <strong>${p.name}</strong><br>
+          💰 ${parseFloat(p.price).toFixed(2)} BYN | 📦 Остаток: ${p.stock || 0}<br>
+          🏷️ Бренд: ${p.brand || '—'} | ${p.category === 'liquids' ? 'Жидкость' : 'Железо'}<br>
+          <img src="${p.image}" class="product-img" onerror="this.style.display='none'"><br>
+          <button onclick="editProduct(${i})">✏️ Редактировать</button>
+          <button class="delete-btn" onclick="deleteProduct(${i})">🗑 Удалить</button>
+        </div>
+      `).join('');
+    }
+
+    function saveProduct() {
+      const name = document.getElementById('name').value.trim();
+      const price = parseFloat(document.getElementById('price').value);
+      const stock = parseInt(document.getElementById('stock').value) || 0;
+      const image = document.getElementById('image').value.trim();
+      const category = document.getElementById('category').value;
+      const brand = document.getElementById('brand').value.trim();
+
+      if (!name || !price || !image) {
+        alert("Заполни название, цену и фото!");
+        return;
+      }
+
+      const product = { name, price, stock, image, category, brand };
+
+      const editIndex = document.getElementById('edit-index').value;
+      if (editIndex !== '') {
+        products[editIndex] = product;
+      } else {
+        products.push(product);
+      }
+
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert("Товар сохранён!");
+          clearForm();
+          loadProducts();
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      })
+      .catch(err => {
+        alert("Ошибка сохранения:\n" + err.message);
+      });
+    }
+
+    function editProduct(index) {
+      const p = products[index];
+      document.getElementById('name').value = p.name;
+      document.getElementById('price').value = p.price;
+      document.getElementById('stock').value = p.stock || 0;
+      document.getElementById('image').value = p.image;
+      document.getElementById('category').value = p.category;
+      document.getElementById('brand').value = p.brand || '';
+      document.getElementById('edit-index').value = index;
+    }
+
+    function deleteProduct(index) {
+      if (!confirm("Удалить товар?")) return;
+      products.splice(index, 1);
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products })
+      }).then(() => {
+        loadProducts();
+        clearForm();
+      });
+    }
+
+    function clearForm() {
+      document.getElementById('name').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('stock').value = '';
+      document.getElementById('image').value = '';
+      document.getElementById('brand').value = '';
+      document.getElementById('edit-index').value = '';
+    }
+
+    loadProducts();
+  </script>
+</body>
+</html>
