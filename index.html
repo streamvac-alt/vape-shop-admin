@@ -36,18 +36,22 @@
   </div>
 
   <script>
-    // ↓↓↓ ЗАМЕНИ ЭТИ URL НА СВОИ ↓↓↓
-    const API_URL = "https://vape-shop-api-streamvac-alt.vercel.app/api/update";
+    // ↓↓↓ ЗАМЕНИ НА СВОЙ URL ↓↓↓
+    const API_URL = "https://vape-shop-api.vercel.app/api/update";
     const DATA_URL = "https://vape-shop-data.vercel.app/db.json";
-    // ↑↑↑ ЗАМЕНИ ЭТИ URL НА СВОИ ↑↑↑
+    // ↑↑↑ ЗАМЕНИ НА СВОЙ URL ↑↑↑
 
     let products = [];
 
     async function loadProducts() {
-      const res = await fetch(DATA_URL + "?t=" + Date.now());
-      const data = await res.json();
-      products = data.products || [];
-      renderList();
+      try {
+        const res = await fetch(DATA_URL + "?t=" + Date.now());
+        const data = await res.json();
+        products = data.products || [];
+        renderList();
+      } catch (err) {
+        alert("Ошибка загрузки: " + err.message);
+      }
     }
 
     function renderList() {
@@ -86,10 +90,11 @@
         products.push(product);
       }
 
+      // Отправляем МАССИВ products
       fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products })
+        body: JSON.stringify({ products }) // ← именно так!
       })
       .then(res => res.json())
       .then(data => {
@@ -98,7 +103,7 @@
           clearForm();
           loadProducts();
         } else {
-          throw new Error(data.error || 'Unknown error');
+          throw new Error(data.error || 'Неизвестная ошибка');
         }
       })
       .catch(err => {
@@ -124,9 +129,13 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products })
-      }).then(() => {
+      })
+      .then(() => {
         loadProducts();
         clearForm();
+      })
+      .catch(err => {
+        alert("Ошибка удаления:\n" + err.message);
       });
     }
 
