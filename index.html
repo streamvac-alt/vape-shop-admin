@@ -1,153 +1,324 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <title>Админка — Vape Shop</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vape Shop</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
-    input, button, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; }
-    button { background: #0088cc; color: white; border: none; cursor: pointer; font-weight: bold; }
-    .delete-btn { background: #e53935; width: auto; display: inline-block; margin: 0 4px; }
-    .product-card { background: white; padding: 16px; margin: 12px 0; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-    .product-img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin: 8px 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      padding: 12px;
+      color: #333;
+    }
+    .search-box input {
+      width: 100%; padding: 10px 16px; border: 1px solid #ccc; border-radius: 24px; font-size: 16px; outline: none; margin-bottom: 16px;
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+    .tab { background: #e0e0e0; border: none; padding: 8px 16px; border-radius: 20px; white-space: nowrap; cursor: pointer; }
+    .tab.active { background: #0088cc; color: white; }
+    .subtabs { display: flex; gap: 6px; margin: 12px 0; overflow-x: auto; }
+    .subtab { background: #d0d0d0; border: none; padding: 6px 12px; border-radius: 16px; font-size: 14px; white-space: nowrap; cursor: pointer; }
+    .subtab.active { background: #0088cc; color: white; }
+    .product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .product { background: white; border-radius: 12px; padding: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .product img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+    .product-name { font-size: 14px; font-weight: 600; margin: 4px 0; }
+    .product-price { font-size: 14px; color: #0088cc; margin-bottom: 4px; }
+    .product-stock { font-size: 12px; color: #666; margin-bottom: 6px; }
+    .btn { background: #0088cc; color: white; border: none; padding: 6px 0; border-radius: 6px; font-size: 13px; cursor: pointer; width: 100%; }
+    .btn.out-of-stock { background: #ccc; cursor: not-allowed; }
+    .cart-btn {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: #ff5722; color: white; border: none; width: 90%; padding: 12px;
+      border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(255,87,34,0.3); display: none;
+    }
+    .cart-btn.show { display: block; }
+    .back-btn { margin-bottom: 12px; background: #666; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
+    #loading { text-align: center; padding: 40px; color: #666; }
   </style>
 </head>
 <body>
-  <div style="max-width:800px; margin:0 auto; padding:20px;">
-    <h2>🛠 Админка — Vape Shop</h2>
-    
-    <h3>➕ Добавить / обновить товар</h3>
-    <input type="text" id="name" placeholder="Название товара">
-    <div style="display:flex; gap:8px;">
-      <input type="number" id="price" placeholder="Цена (BYN)" step="0.01">
-      <input type="number" id="stock" placeholder="Остаток на складе" min="0">
-    </div>
-    <input type="text" id="image" placeholder="Ссылка на фото (загрузите на imgbb.com)">
-    <select id="category">
-      <option value="liquids">Жидкости</option>
-      <option value="hardware">Железо</option>
-    </select>
-    <input type="text" id="brand" placeholder="Бренд (латиницей, например: bad_drip)">
-    <input type="hidden" id="edit-index">
-    <button onclick="saveProduct()">Сохранить товар</button>
+  <div id="loading">Загрузка каталога...</div>
 
-    <h3>📦 Товары</h3>
-    <div id="products-list"></div>
+  <div id="screen-home" style="display:none;">
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="Поиск по названию..." oninput="handleSearch()">
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="liquids">Жидкости</button>
+      <button class="tab" data-tab="hardware">Железо</button>
+    </div>
+    <div id="subtabs-liquids" class="subtabs"></div>
+    <div id="subtabs-hardware" class="subtabs" style="display:none;"></div>
+    <div class="product-grid" id="products-container"></div>
   </div>
 
+  <div id="screen-search" style="display:none;">
+    <button class="back-btn" onclick="exitSearch()">← Назад к категориям</button>
+    <div class="search-box">
+      <input type="text" id="search-input-top" placeholder="Поиск..." oninput="handleSearch()" value="">
+    </div>
+    <div class="product-grid" id="search-results"></div>
+  </div>
+
+  <div id="screen-cart" style="display:none;">
+    <button class="back-btn" onclick="showScreen('home')">← Назад к товарам</button>
+    <h3>Ваша корзина</h3>
+    <div id="cart-items"></div>
+    <div style="margin-top: 12px; font-weight: bold;">Итого: <span id="cart-total">0</span> BYN</div>
+    <button class="btn" style="background:#4caf50; margin-top:12px;" onclick="sendOrder()">Оформить заказ</button>
+  </div>
+
+  <button class="cart-btn" id="cart-btn" onclick="showScreen('cart')">Корзина: <span id="cart-count">0</span></button>
+
   <script>
-    // ↓↓↓ ЗАМЕНИ НА СВОЙ URL ↓↓↓
-    const API_URL = "https://vape-shop-api.vercel.app/api/update";
-    const DATA_URL = "https://vape-shop-data.vercel.app/db.json";
-    // ↑↑↑ ЗАМЕНИ НА СВОЙ URL ↑↑↑
+    // ↓↓↓ НАСТРОЙКИ — ЗАМЕНИ НА СВОИ ↓↓↓
+    const BOT_TOKEN = "ВАШ_ТОКЕН_ОТ_BOTFATHER"; // ← клиент даёт свой
+    const YOUR_CHAT_ID = 660436506; // ← по умолчанию твой
+    const DATA_URL = "https://vape-shop-data.vercel.app/db.json"; // ← замени на свой
+    // ↑↑↑ НАСТРОЙКИ — ЗАМЕНИ НА СВОИ ↑↑↑
 
-    let products = [];
+    let allProducts = [];
+    let currentCategory = 'liquids';
+    let isSearchMode = false;
+    let cart = JSON.parse(localStorage.getItem('cart')) || [];
 
+    // ЗАГРУЗКА ТОВАРОВ С ОБХОДОМ КЭША
     async function loadProducts() {
       try {
-        const res = await fetch(DATA_URL + "?t=" + Date.now());
+        // Добавляем timestamp для обхода кэширования
+        const cacheBuster = Date.now();
+        const res = await fetch(`${DATA_URL}?t=${cacheBuster}`);
         const data = await res.json();
-        products = data.products || [];
-        renderList();
-      } catch (err) {
-        alert("Ошибка загрузки: " + err.message);
+        allProducts = data.products || [];
+        showScreen('home');
+        renderProducts();
+        updateCartUI();
+      } catch (e) {
+        document.getElementById('loading').innerHTML = '❌ Ошибка загрузки каталога';
+        console.error(e);
       }
     }
 
-    function renderList() {
-      const list = document.getElementById('products-list');
-      list.innerHTML = products.map((p, i) => `
-        <div class="product-card">
-          <strong>${p.name}</strong><br>
-          💰 ${parseFloat(p.price).toFixed(2)} BYN | 📦 Остаток: ${p.stock || 0}<br>
-          🏷️ Бренд: ${p.brand || '—'} | ${p.category === 'liquids' ? 'Жидкость' : 'Железо'}<br>
-          <img src="${p.image}" class="product-img" onerror="this.style.display='none'"><br>
-          <button onclick="editProduct(${i})">✏️ Редактировать</button>
-          <button class="delete-btn" onclick="deleteProduct(${i})">🗑 Удалить</button>
+    function showScreen(screen) {
+      document.getElementById('loading').style.display = 'none';
+      document.querySelectorAll('[id^="screen-"]').forEach(el => el.style.display = 'none');
+      document.getElementById(`screen-${screen}`).style.display = 'block';
+      isSearchMode = (screen === 'search');
+    }
+
+    function renderProducts() {
+      if (isSearchMode) return;
+      const products = allProducts.filter(p => p.category === currentCategory);
+      const brands = [...new Set(products.map(p => p.brand))];
+      
+      const subtabsEl = currentCategory === 'liquids' 
+        ? document.getElementById('subtabs-liquids')
+        : document.getElementById('subtabs-hardware');
+      
+      subtabsEl.innerHTML = '<button class="subtab active" onclick="filterByBrand(null)">Все</button>';
+      brands.forEach(brand => {
+        const btn = document.createElement('button');
+        btn.className = 'subtab';
+        btn.textContent = brand?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || brand;
+        btn.onclick = () => filterByBrand(brand);
+        subtabsEl.appendChild(btn);
+      });
+      document.getElementById('subtabs-liquids').style.display = currentCategory === 'liquids' ? 'flex' : 'none';
+      document.getElementById('subtabs-hardware').style.display = currentCategory === 'hardware' ? 'flex' : 'none';
+
+      const container = document.getElementById('products-container');
+      container.innerHTML = products.map(p => `
+        <div class="product">
+          <img src="${p.image || ''}" alt="${p.name}" onerror="this.style.display='none'">
+          <div class="product-name">${p.name}</div>
+          <div class="product-price">${parseFloat(p.price).toFixed(2)} BYN</div>
+          <div class="product-stock">Остаток: ${p.stock || 0}</div>
+          <button class="btn ${(!p.stock || p.stock <= 0) ? 'out-of-stock' : ''}" 
+                  onclick="addToCart('${p.name}')" 
+                  ${(!p.stock || p.stock <= 0) ? 'disabled' : ''}>
+            ${(!p.stock || p.stock <= 0) ? 'Нет в наличии' : 'В корзину'}
+          </button>
         </div>
       `).join('');
     }
 
-    function saveProduct() {
-      const name = document.getElementById('name').value.trim();
-      const price = parseFloat(document.getElementById('price').value);
-      const stock = parseInt(document.getElementById('stock').value) || 0;
-      const image = document.getElementById('image').value.trim();
-      const category = document.getElementById('category').value;
-      const brand = document.getElementById('brand').value.trim();
+    function filterByBrand(brand) {
+      document.querySelectorAll('.subtab').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      const container = document.getElementById('products-container');
+      const products = brand 
+        ? allProducts.filter(p => p.category === currentCategory && p.brand === brand)
+        : allProducts.filter(p => p.category === currentCategory);
+      container.innerHTML = products.map(p => `
+        <div class="product">
+          <img src="${p.image || ''}" alt="${p.name}" onerror="this.style.display='none'">
+          <div class="product-name">${p.name}</div>
+          <div class="product-price">${parseFloat(p.price).toFixed(2)} BYN</div>
+          <div class="product-stock">Остаток: ${p.stock || 0}</div>
+          <button class="btn ${(!p.stock || p.stock <= 0) ? 'out-of-stock' : ''}" 
+                  onclick="addToCart('${p.name}')" 
+                  ${(!p.stock || p.stock <= 0) ? 'disabled' : ''}>
+            ${(!p.stock || p.stock <= 0) ? 'Нет в наличии' : 'В корзину'}
+          </button>
+        </div>
+      `).join('');
+    }
 
-      if (!name || !price || !image) {
-        alert("Заполни название, цену и фото!");
+    function handleSearch() {
+      const query = (document.getElementById('search-input').value || document.getElementById('search-input-top').value).toLowerCase().trim();
+      if (!query) return showScreen('home');
+      showScreen('search');
+      document.getElementById('search-input-top').value = query;
+      const results = allProducts.filter(p => p.name.toLowerCase().includes(query));
+      document.getElementById('search-results').innerHTML = results.length
+        ? results.map(p => `
+            <div class="product">
+              <img src="${p.image || ''}" alt="${p.name}" onerror="this.style.display='none'">
+              <div class="product-name">${p.name}</div>
+              <div class="product-price">${parseFloat(p.price).toFixed(2)} BYN</div>
+              <div class="product-stock">Остаток: ${p.stock || 0}</div>
+              <button class="btn ${(!p.stock || p.stock <= 0) ? 'out-of-stock' : ''}" 
+                      onclick="addToCart('${p.name}')" 
+                      ${(!p.stock || p.stock <= 0) ? 'disabled' : ''}>
+                ${(!p.stock || p.stock <= 0) ? 'Нет в наличии' : 'В корзину'}
+              </button>
+            </div>
+          `).join('')
+        : '<p style="text-align:center; padding:20px;">Ничего не найдено</p>';
+    }
+
+    function exitSearch() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('search-input-top').value = '';
+      showScreen('home');
+    }
+
+    function addToCart(productName) {
+      const product = allProducts.find(p => p.name === productName);
+      if (!product) return;
+      
+      if ((product.stock || 0) <= 0) {
+        alert("Товар закончился!");
         return;
       }
 
-      const product = { name, price, stock, image, category, brand };
-
-      const editIndex = document.getElementById('edit-index').value;
-      if (editIndex !== '') {
-        products[editIndex] = product;
-      } else {
-        products.push(product);
+      const inCart = cart.filter(item => item.name === product.name).length;
+      if (inCart >= (product.stock || 0)) {
+        alert("Нельзя добавить больше, чем есть в наличии!");
+        return;
       }
 
-      // Отправляем МАССИВ products
-      fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products }) // ← именно так!
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          alert("Товар сохранён!");
-          clearForm();
-          loadProducts();
-        } else {
-          throw new Error(data.error || 'Неизвестная ошибка');
-        }
-      })
-      .catch(err => {
-        alert("Ошибка сохранения:\n" + err.message);
+      cart.push(product);
+      saveCart();
+      updateCartUI();
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      saveCart();
+      renderCart();
+      updateCartUI();
+    }
+
+    function saveCart() {
+      localStorage.setItem('cart', JSON.stringify(cart));
+    }
+
+    function updateCartUI() {
+      const count = cart.length;
+      const total = cart.reduce((sum, item) => sum + (item.price || 0), 0);
+      document.getElementById('cart-count').textContent = count;
+      document.getElementById('cart-total').textContent = total.toFixed(2);
+      document.getElementById('cart-btn').classList.toggle('show', count > 0);
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-items');
+      if (cart.length === 0) {
+        container.innerHTML = '<p>Корзина пуста</p>';
+        return;
+      }
+      container.innerHTML = cart.map((item, index) => `
+        <div style="padding: 10px 0; border-bottom:1px solid #eee;">
+          <div><strong>${item.name}</strong></div>
+          <div>${parseFloat(item.price).toFixed(2)} BYN</div>
+          <button class="btn" style="background:#f44336; margin-top:6px;" onclick="removeFromCart(${index})">Удалить</button>
+        </div>
+      `).join('');
+      const total = cart.reduce((sum, item) => sum + (item.price || 0), 0);
+      document.getElementById('cart-total').textContent = total.toFixed(2);
+    }
+
+    function sendOrder() {
+      if (cart.length === 0) return;
+      
+      // Проверка остатков
+      const stockCount = {};
+      cart.forEach(item => {
+        stockCount[item.name] = (stockCount[item.name] || 0) + 1;
       });
-    }
+      
+      const outOfStock = cart.filter(item => 
+        stockCount[item.name] > (allProducts.find(p => p.name === item.name)?.stock || 0)
+      );
+      
+      if (outOfStock.length > 0) {
+        alert("Некоторые товары закончились. Обновите страницу.");
+        return;
+      }
 
-    function editProduct(index) {
-      const p = products[index];
-      document.getElementById('name').value = p.name;
-      document.getElementById('price').value = p.price;
-      document.getElementById('stock').value = p.stock || 0;
-      document.getElementById('image').value = p.image;
-      document.getElementById('category').value = p.category;
-      document.getElementById('brand').value = p.brand || '';
-      document.getElementById('edit-index').value = index;
-    }
+      const user = Telegram.WebApp.initDataUnsafe?.user;
+      const username = user?.username ? `@${user.username}` : (user?.first_name || "Аноним");
+      const orderText = cart.map(item => `- ${item.name} — ${parseFloat(item.price).toFixed(2)} BYN`).join('\n');
+      const total = cart.reduce((sum, item) => sum + (item.price || 0), 0);
 
-    function deleteProduct(index) {
-      if (!confirm("Удалить товар?")) return;
-      products.splice(index, 1);
-      fetch(API_URL, {
+      const message = `
+📦 НОВЫЙ ЗАКАЗ!
+👤 ${username}
+🛒 Товары:
+${orderText}
+💰 Итого: ${total.toFixed(2)} BYN
+      `.trim();
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products })
-      })
-      .then(() => {
-        loadProducts();
-        clearForm();
-      })
-      .catch(err => {
-        alert("Ошибка удаления:\n" + err.message);
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ chat_id: YOUR_CHAT_ID, text: message })
       });
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          chat_id: user?.id,
+          text: "✅ Ваш заказ оформлен! Ожидайте сообщения от продавца."
+        })
+      });
+
+      alert("Заказ отправлен!");
+      cart = [];
+      saveCart();
+      updateCartUI();
+      showScreen('home');
     }
 
-    function clearForm() {
-      document.getElementById('name').value = '';
-      document.getElementById('price').value = '';
-      document.getElementById('stock').value = '';
-      document.getElementById('image').value = '';
-      document.getElementById('brand').value = '';
-      document.getElementById('edit-index').value = '';
-    }
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (isSearchMode) exitSearch();
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCategory = btn.dataset.tab;
+        renderProducts();
+      });
+    });
 
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
     loadProducts();
   </script>
 </body>
